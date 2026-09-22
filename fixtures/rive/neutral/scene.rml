@@ -1,0 +1,29 @@
+<Rive version="1" kind="fragment">
+    <Artboard defaultStateMachineId="0:7" width="128" height="128" styleId="0:5" name="Artboard" id="0:2">
+        <Fill name="Background">
+            <SolidColor colorValue="FF282828" name="Color"/>
+        </Fill>
+
+        <LayoutComponentStyle name="Artboard Style" id="0:5"/>
+
+        <Shape x="64" y="64" name="NeutralTriangle" id="0:14">
+            <Triangle originX="0.5" originY="0.5" width="80" height="72" name="Path"/>
+            <Fill name="Fill">
+                <SolidColor colorValue="FF57A5E0" name="Color"/>
+            </Fill>
+        </Shape>
+
+        <LinearAnimation duration="60" name="Animation 1" id="0:6"/>
+
+        <StateMachine name="State Machine 1" id="0:7">
+            <StateMachineLayer name="Layer 1" id="0:8">
+                <AnyState x="200" y="-120"/>
+                <ExitState x="400" y="-120"/>
+                <EntryState>
+                    <StateTransition stateToId="0:12"/>
+                </EntryState>
+                <AnimationState x="200" animationId="0:6" id="0:12"/>
+            </StateMachineLayer>
+        </StateMachine>
+    </Artboard>
+</Rive>

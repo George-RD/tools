@@ -1,6 +1,8 @@
 import { Composition } from "remotion";
 import { HelloWorld } from "./HelloWorld";
 import { Logo } from "./HelloWorld/Logo";
+import { RiveShowcase } from "./Rive/RiveShowcase";
+import { ThreeShowcase } from "./Three/ThreeShowcase";
 
 // Each <Composition> is an entry in the sidebar!
 
@@ -38,6 +40,27 @@ export const RemotionRoot: React.FC = () => {
           logoColor1: "#91dAE2",
           logoColor2: "#86A8E7",
         }}
+      />
+
+      {/* Rive integration — loads the animation and its WASM from local files
+          only; see scripts/patch-remotion-rive-offline.sh. */}
+      <Composition
+        id="RiveShowcase"
+        component={RiveShowcase}
+        durationInFrames={90}
+        fps={30}
+        width={512}
+        height={384}
+      />
+
+      {/* three.js via @remotion/three + @react-three/fiber, software GL. */}
+      <Composition
+        id="ThreeShowcase"
+        component={ThreeShowcase}
+        durationInFrames={90}
+        fps={30}
+        width={640}
+        height={480}
       />
     </>
   );

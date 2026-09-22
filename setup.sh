@@ -27,9 +27,40 @@ if [ -d .archives ]; then
 
   archives=(.archives/*.tar.gz .verify/*.tar.gz)
   if [ "${#archives[@]}" -gt 0 ]; then
-    echo "-- extracting ${#archives[@]} archive(s)"
+    # Hash-check BEFORE extracting. A corrupt or truncated archive must be
+    # rejected, not unpacked into the tree: a half-extracted payload would then
+    # look "present" to the marker check below and poison every later run.
+    declare -A WANT=()
+    if [ -f .archives/MANIFEST.sha256 ]; then
+      while read -r want name; do
+        [ -n "${want:-}" ] && WANT["$name"]="$want"
+      done < .archives/MANIFEST.sha256
+    fi
+    verified=0; missing_manifest=0
     for a in "${archives[@]}"; do
       name="$(basename "$a" .tar.gz)"
+      want="${WANT["$name.tar.gz"]:-}"
+      if [ -z "$want" ]; then
+        missing_manifest=1
+        printf '   no manifest entry for %s.tar.gz (cannot verify)\n' "$name"
+        continue
+      fi
+      got="$(sha256sum "$a" | awk '{print $1}')"
+      if [ "$got" != "$want" ]; then
+        printf '   BAD  %s.tar.gz (hash mismatch)\n' "$name" >&2
+        printf '        expected %s\n        got      %s\n' "$want" "$got" >&2
+        printf 'Refusing to extract: the archives do not match MANIFEST.sha256.\n' >&2
+        exit 1
+      fi
+      verified=$((verified+1))
+    done
+    [ "$verified" -gt 0 ] && echo "-- verified $verified archive(s) against MANIFEST.sha256"
+    [ "$missing_manifest" = 1 ] && printf '   (some archives had no manifest entry; they are skipped, not extracted)\n'
+
+    echo "-- extracting archive(s)"
+    for a in "${archives[@]}"; do
+      name="$(basename "$a" .tar.gz)"
+      [ -n "${WANT["$name.tar.gz"]:-}" ] || continue   # unverifiable: refuse
       # Both Remotion browser bundles extract into the same .remotion tree, so
       # check a per-platform marker rather than the shared parent directory.
       case "$name" in
@@ -46,7 +77,10 @@ if [ -d .archives ]; then
         continue
       fi
       echo "   extract $name"
-      tar -xzf "$a" -C .
+      tar -xzf "$a" -C . || {
+        printf '   FAILED to extract %s (archive corrupt?)\n' "$name" >&2
+        exit 1
+      }
     done
   fi
 fi

@@ -28,8 +28,7 @@ if [ -x rive-official/bin/rive ]; then
     *)           bad "rive --version (got: ${v:-<no output>})";;
   esac
 
-  mkdir -p "$WORK/rive" && cp -r rive-official/../../riv-tools/official/smoke/neutral "$WORK/rive/" 2>/dev/null || \
-    cp -r /var/lib/hermes/riv-tools/official/smoke/neutral "$WORK/rive/" 2>/dev/null || true
+  mkdir -p "$WORK/rive" && cp -r fixtures/rive/neutral "$WORK/rive/" 2>/dev/null || true
   if [ -d "$WORK/rive/neutral" ]; then
     rm -rf "$WORK/rive/neutral/build"
     check "rive verify"  rive-official/bin/rive "$WORK/rive/neutral" --verify --format=json
@@ -81,11 +80,14 @@ if [ -x hyperframes/bin/hyperframes ]; then
   [ -n "$v" ] && ok "hyperframes --version ($v)" || bad "hyperframes --version"
   check "hyperframes doctor runs" hyperframes/bin/hyperframes doctor
   # Author a composition with real seeked motion and render it.
+  # The GSAP script is served from the repository's own copy (vendor/gsap), not a
+  # CDN, so this check also fails if an offline render would need the network.
   mkdir -p "$WORK/hf"
+  cp vendor/gsap/gsap-3.14.2.min.js "$WORK/hf/gsap.min.js"
   cat > "$WORK/hf/index.html" <<'HTML'
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"/>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script src="./gsap.min.js"></script>
 <style>html,body{margin:0;background:#101010}#stage{position:relative;width:320px;height:180px;overflow:hidden}
 .clip{position:absolute}.box{width:40px;height:40px;background:#b98d3f;top:70px;left:20px}</style></head>
 <body><div id="stage" data-composition-id="verify" data-start="0" data-width="320" data-height="180">
@@ -146,6 +148,22 @@ if [ -x remotion/bin/remotion ]; then
   else
     bad "remotion render failed"
   fi
+
+  # The Rive integration must not reach for a CDN: upstream @remotion/rive
+  # hardcodes an unpkg.com URL for its WASM, and this repository patches it to
+  # load a local copy instead (scripts/patch-remotion-rive-offline.sh).
+  if bash scripts/patch-remotion-rive-offline.sh --check >/dev/null 2>&1; then
+    ok "remotion rive WASM is local (no CDN)"
+  else
+    bad "remotion rive WASM still points at a CDN — run scripts/patch-remotion-rive-offline.sh"
+  fi
+  for pkg in "@remotion/rive" "@remotion/three" "three" "@react-three/fiber"; do
+    if [ -f "remotion/node_modules/$pkg/package.json" ]; then
+      ok "remotion integration present ($pkg@$(jq -r .version "remotion/node_modules/$pkg/package.json" 2>/dev/null))"
+    else
+      bad "remotion integration missing ($pkg)"
+    fi
+  done
 else
   bad "remotion/bin/remotion missing"
 fi
