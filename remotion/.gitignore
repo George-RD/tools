@@ -1,7 +1,16 @@
-node_modules
+# This repository intentionally COMMITS the installed dependency tree: it exists
+# so sandboxes without network access or package managers can clone it and run
+# Remotion immediately. Do not add a blanket node_modules ignore here.
+#
+# The two pinned browser directories are the exception: browser binaries exceed
+# GitHub's per-file limit, so their exact bytes are committed as
+# .archives/remotion-browser-*.tar.gz and restored by the repository's setup.sh.
+node_modules/.remotion/chrome-headless-shell/linux64/
+node_modules/.remotion/chrome-headless-shell/linux-arm64/
+
 dist
 .DS_Store
 .env
 
-# Ignore the output video from Git but not videos you import into src/.
-out
+# Rendered output videos (media you import into src/ is still tracked).
+out/*
