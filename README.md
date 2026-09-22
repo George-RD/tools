@@ -172,7 +172,15 @@ it got are the bytes that were packed.
 Note: GitHub does not serve Actions artifacts anonymously — the REST download
 endpoint answers `401` without a token even for a public repo, so the receiving
 connector must be authenticated to the repo (any token with `actions:read`, or
-repo read access).
+repo read access). Artifacts also expire (this one: 14 days), and artifact
+storage is metered against the account's Actions allowance.
+
+**Release assets are the better carrier for a full bundle.** GitHub *does* serve
+release assets to anonymous clients (`200` verified on this repo), they do not
+expire, and the documented limits are generous: under 2 GiB per file, up to 1000
+assets per release, and no total-size or bandwidth limit. The identical test
+payload is published as release `transfer-test-1` so a receiving client can
+compare both routes byte for byte.
 
 ## Large payloads and this repository's packing rule
 
