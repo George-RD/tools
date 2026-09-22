@@ -97,6 +97,11 @@ remotion/node_modules/.remotion/chrome-headless-shell/linux64/
 # that `rive login` writes). Regenerated automatically; never commit it.
 rive-official/home/
 
+# Offline bundle staging (scripts/pack-offline-bundle.sh). The parts are ~2 GB,
+# far above GitHub's 100 MiB per-file limit, so they are published as release
+# assets / workflow artifacts — never committed.
+.bundle/
+
 # Crash artefacts: QEMU/Chrome core dumps are large, meaningless, and would
 # otherwise be swept into a commit by `git add -A`.
 *.core

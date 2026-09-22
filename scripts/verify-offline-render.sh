@@ -24,6 +24,17 @@ echo "== offline render check =="
 echo "host network for comparison:"
 (timeout 8 curl -sI https://unpkg.com 2>/dev/null | head -1) || echo "  (host cannot reach unpkg.com either)"
 
+# Not every host allows creating a network namespace (unprivileged containers
+# often do not). Skip loudly rather than reporting a failure that is about the
+# test harness instead of the toolchain.
+if ! unshare -rn true 2>/dev/null; then
+  echo
+  echo "SKIP: 'unshare -rn' is unavailable here, so network isolation cannot be"
+  echo "      proven on this host. Run this script where unprivileged network"
+  echo "      namespaces are permitted for the real proof."
+  exit 3
+fi
+
 unshare -rn bash -c '
 set -euo pipefail
 ROOT="'"$ROOT"'"

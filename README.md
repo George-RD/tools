@@ -81,6 +81,39 @@ The project's pinned browser is pre-seeded for both linux arches in
 it with the vendored libraries. Nothing downloads on first render.
 Set `REMOTION_USE_DEFAULT_BROWSER=1` to use Remotion's own browser management.
 
+#### Rive and three.js integrations
+
+`@remotion/rive`, `@remotion/three`, `three` and `@react-three/fiber` are
+installed at the matching Remotion version, with two ready compositions:
+
+```bash
+../remotion/bin/remotion render src/index.ts RiveShowcase out/rive.mp4
+../remotion/bin/remotion render src/index.ts ThreeShowcase out/three.mp4
+```
+
+**Rive is the one part of this repository that upstream ships broken for
+offline use.** `@remotion/rive` hardcodes its WASM at
+
+```
+https://unpkg.com/@rive-app/canvas-advanced@2.31.5/rive.wasm
+```
+
+so every render fetches from unpkg.com — and upstream still does this in
+4.0.527. `scripts/patch-remotion-rive-offline.sh` fixes it in place: it copies
+the WASM into `remotion/public/` and repoints `locateFile()` at Remotion's own
+`staticFile()` in both the CJS and ESM builds, syntax-checking each file it
+rewrites. It is idempotent, so re-run it after any `npm install` or Remotion
+upgrade — and `scripts/verify.sh` fails if the patch is missing, so a silent
+regression is not possible.
+
+three.js needs no patching: `@remotion/three` is clean, and Remotion's headless
+Chrome supplies WebGL in software, so the scene renders with no GPU and no
+network.
+
+`bash scripts/verify-remotion-integrations.sh` renders both and checks that
+successive frames actually differ — a render that succeeded but showed one
+frozen frame would otherwise look like a pass.
+
 ### Rive CLI
 
 ```bash
@@ -148,9 +181,56 @@ bash scripts/audit-libs.sh            # check the overlays are self-sufficient
 bash scripts/vendor-rive.sh           # Rive payload + QEMU + x86-64 libs + Mesa
 bash scripts/update-rive.sh           # move the Rive payload to the latest release
 bash scripts/fetch-hf-lfs.sh          # real LFS media for skills/src assets
+bash scripts/patch-remotion-rive-offline.sh   # local Rive WASM (re-run after npm install)
 bash scripts/pack-archives.sh         # .archives bundles + manifest
 bash scripts/verify.sh                # end-to-end verification
 ```
+
+## Offline bundle (Linux x64)
+
+For a consumer that can neither clone this repository nor download anything,
+`scripts/pack-offline-bundle.sh` builds a single self-contained archive:
+
+```bash
+bash scripts/pack-offline-bundle.sh              # -> .bundle/
+bash scripts/pack-offline-bundle.sh --part-mib 1900
+```
+
+It ships the linux-x64 halves of everything (Node, Chrome Headless Shell and
+its libraries, FFmpeg, HyperFrames, Remotion including `node_modules` and the
+Rive/three integrations, the Rive CLI with its QEMU layer), the local test
+assets, a `VERSION-MANIFEST.txt` naming every tool version, and SHA-256
+checksums. It excludes the arm64 halves, `.git`, the `.downloads`/`.verify`
+scratch trees, and `rive-official/home` — the Rive CLI's runtime state, which
+is where `rive login` writes credentials.
+
+Parts above the chosen size are split, and the checksum file hashes the
+*logical* joined archive so the receiving side verifies the reassembled file:
+
+```bash
+cat tools-linux-x64-offline.tar.gz.part-* > tools-linux-x64-offline.tar.gz
+sha256sum -c tools-linux-x64-offline.tar.gz.sha256
+tar -xzf tools-linux-x64-offline.tar.gz
+./setup.sh && bash scripts/verify.sh
+```
+
+`.bundle/` is gitignored: ~2 GB parts are far above GitHub's 100 MiB per-file
+limit, so they are published as release assets and mirrored to a workflow
+artifact (`.github/workflows/publish-bundle-artifact.yml`) rather than
+committed. Two routes are maintained deliberately — a connector-only
+environment can only download Actions artifacts, while release assets are the
+better permanent copy (anonymous, no expiry, 2 GiB per file).
+
+## Proving the integrations work offline
+
+```bash
+bash scripts/verify-offline-render.sh
+```
+
+Renders both Remotion integrations inside a network namespace with no route off
+the machine, printing positive and negative controls first so a pass cannot be
+a false positive. It needs unprivileged network namespaces; where those are
+unavailable it exits 3 with a SKIP rather than reporting a misleading failure.
 
 ## Transfer tests
 

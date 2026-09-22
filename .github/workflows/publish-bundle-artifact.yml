@@ -1,0 +1,125 @@
+name: Publish offline bundle as an artifact
+
+# Re-publishes the Linux-x64 offline bundle through the Actions-artifact route.
+#
+# Why both routes exist: the connector-only receiving environment has exactly
+# one binary-download action — the Actions-artifact downloader. Release assets
+# are the better permanent copy (anonymous, no expiry, 2 GiB per file) but that
+# session cannot fetch them. So the release is the distribution copy and this
+# workflow mirrors it into an artifact the session can actually download.
+#
+# The bundle is built locally by scripts/pack-offline-bundle.sh and uploaded as
+# release assets (parts are ~2 GB, far above the 100 MiB per-file limit for
+# committable files, so the repository never holds them). This workflow pulls
+# the parts back down from the release and re-uploads them as one artifact.
+# Standard runners and artifact storage are free for public repositories.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag holding the bundle parts'
+        required: true
+        default: 'bundle-linux-x64-1'
+      part_name:
+        description: 'Bundle part filename prefix (no .part-NN suffix)'
+        required: false
+        default: 'tools-linux-x64-offline.tar.gz'
+      retention_days:
+        description: 'Artifact retention in days (1-90)'
+        required: false
+        default: '90'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Download the bundle parts from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          NAME: ${{ inputs.part_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p bundle
+          cd bundle
+          # Grab every asset belonging to the bundle: the parts and the
+          # checksum/manifest files beside them.
+          gh release download "$TAG" \
+            -R "$GITHUB_REPOSITORY" \
+            --pattern "$NAME*" \
+            --pattern "VERSION-MANIFEST.txt" \
+            --clobber
+          echo "== downloaded =="
+          ls -lh
+
+      - name: Verify the parts
+        env:
+          NAME: ${{ inputs.part_name }}
+        run: |
+          set -euo pipefail
+          cd bundle
+          if [ -f "$NAME.parts.sha256" ]; then
+            sha256sum -c "$NAME.parts.sha256"
+          fi
+          if [ -f "$NAME.tar.gz.sha256" ] && compgen -G "$NAME.part-*" >/dev/null; then
+            joined="$(cat "$NAME.part-"* | sha256sum | awk '{print $1}')"
+            want="$(awk '{print $1}' "$NAME.tar.gz.sha256")"
+            if [ "$joined" = "$want" ]; then
+              echo "ok: parts rejoin to the expected archive hash ($joined)"
+            else
+              echo "::error::rejoined parts hash $joined, expected $want"
+              exit 1
+            fi
+          else
+            echo "no split parts found — uploading a single archive"
+          fi
+
+      - name: Summarise for the receiving side
+        env:
+          NAME: ${{ inputs.part_name }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Offline bundle — Linux x64"
+            echo
+            echo "Mirror of release \`$TAG\` for the connector-only route."
+            echo
+            echo '```'
+            ls -lh bundle
+            echo '```'
+            echo
+            if [ -f "bundle/$NAME.tar.gz.sha256" ]; then
+              echo "Logical archive SHA-256 — verify the JOINED file against this:"
+              echo
+              echo '```'
+              cat "bundle/$NAME.tar.gz.sha256"
+              echo '```'
+            fi
+            echo
+            echo "### Reassemble on the receiving side"
+            echo "1. download every part of this artifact and unzip it somewhere writable"
+            echo "2. \`cat $NAME.part-* > $NAME\`  (name order: part-00, part-01, …)"
+            echo "3. \`sha256sum -c $NAME.tar.gz.sha256\`"
+            echo "4. \`tar -xzf $NAME\`"
+            echo "5. \`./setup.sh\`"
+            echo "6. \`bash scripts/verify.sh\`  — 23 checks"
+            echo "7. \`bash scripts/verify-remotion-integrations.sh\`"
+            echo
+            echo "\`VERSION-MANIFEST.txt\` lists every tool version inside the bundle."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload as one artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: tools-linux-x64-offline
+          path: |
+            bundle/${{ inputs.part_name }}*
+            bundle/VERSION-MANIFEST.txt
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
