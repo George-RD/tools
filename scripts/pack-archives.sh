@@ -93,6 +93,10 @@ remotion/node_modules/.remotion/chrome-headless-shell/linux64/
 .downloads/
 .verify/
 
+# Rive wrapper runtime state (HOME for the CLI: caches, logs, and the auth token
+# that `rive login` writes). Regenerated automatically; never commit it.
+rive-official/home/
+
 # Crash artefacts: QEMU/Chrome core dumps are large, meaningless, and would
 # otherwise be swept into a commit by `git add -A`.
 *.core

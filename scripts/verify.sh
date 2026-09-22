@@ -67,6 +67,14 @@ else
   bad "scripts/audit-libs.sh missing"
 fi
 
+# The Rive wrapper uses rive-official/home/ as the CLI's HOME: caches and the
+# auth token that `rive login` writes land there, so it must stay untracked.
+if [ -n "$(git ls-files rive-official/home 2>/dev/null)" ]; then
+  bad "rive-official/home is tracked (runtime state/credentials must not be committed)"
+else
+  ok "rive-official/home untracked (runtime state)"
+fi
+
 echo "== HyperFrames =="
 if [ -x hyperframes/bin/hyperframes ]; then
   v="$(hyperframes/bin/hyperframes --version 2>/dev/null | tail -1)"
