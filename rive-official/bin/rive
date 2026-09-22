@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Relocatable launcher for the official Rive CLI 1.0.2 (linux x64 payload).
+#
+# The official CLI ships x86-64 only. On this machine that payload runs under a
+# static QEMU user emulator with vendored x86-64 libraries and Mesa software EGL,
+# so nothing outside this directory is required (no Nix store, no system packages,
+# no display server). On a real x86-64 host the same vendored libraries load via
+# the vendored glibc loader.
+#
+# State (login tokens, caches, logs) is kept under ./home unless RIVE_VENDOR_STATE
+# is set, so the CLI never writes into the caller's HOME.
+# Pinned to one version: update/switch/uninstall are refused.
+set -euo pipefail
+root="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+readonly root
+readonly version=1.0.2
+case "${1-}" in
+  update|switch|uninstall)
+    printf '%s\n' 'This vendored copy is pinned to 1.0.2; automatic version management is disabled.' >&2
+    printf '%s\n' 'On an x86-64 host, install/update via https://releases.rive.app/cli/install.sh' >&2
+    exit 2
+    ;;
+esac
+
+# Scoped state so the CLI never writes into the caller's HOME.
+export RIVE_HOME="${RIVE_VENDOR_STATE:-$root/home}"
+export HOME="$RIVE_HOME/home"
+mkdir -p "$HOME" "$RIVE_HOME/tmp" "$RIVE_HOME/work/egl_vendor.d"
+export XDG_CONFIG_HOME="$HOME/.config" XDG_CACHE_HOME="$HOME/.cache"
+export XDG_DATA_HOME="$HOME/.local/share" XDG_STATE_HOME="$HOME/.local/state"
+export XDG_RUNTIME_DIR="$HOME/.runtime"
+export TMPDIR="$RIVE_HOME/tmp"
+export RIVE_DOCS_DIR="$root/versions/$version/docs"
+export RIVE_SAMPLES_DIR="$root/versions/$version/samples"
+export RIVE_ANALYTICS=off
+export RIVE_NO_TUI=1
+export NO_COLOR=1
+
+# Headless software rendering (no display server, no GPU needed).
+export EGL_PLATFORM=surfaceless
+export GALLIUM_DRIVER=llvmpipe
+export MESA_LOADER_DRIVER_OVERRIDE=swrast
+export LIBGL_DRIVERS_PATH="$root/compat/mesa-x64/lib/dri"
+export XDG_DATA_DIRS="$root/compat/mesa-x64/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+# Absolute repo-relative EGL vendor manifest (generated here for relocatability).
+vendor_json="$RIVE_HOME/work/egl_vendor.d/50_mesa.json"
+printf '{\n  "file_format_version": "1.0.0",\n  "ICD": {\n    "library_path": "%s"\n  }\n}\n' \
+  "$root/compat/mesa-x64/lib/libEGL_mesa.so.0" > "$vendor_json"
+export __EGL_VENDOR_LIBRARY_FILENAMES="$vendor_json"
+
+readonly guest_libs="$root/compat/glibc/lib:$root/compat/gcc-libs/lib:$root/compat/zlib/lib:$root/compat/glvnd/lib:$root/compat/x11/lib:$root/compat/wayland/lib:$root/compat/xkbcommon/lib:$root/compat/mesa-x64/lib"
+ulimit -c 0
+
+case "$(uname -m)" in
+  x86_64)
+    exec "$root/compat/glibc/lib/ld-linux-x86-64.so.2" \
+      --library-path "$guest_libs" \
+      "$root/versions/$version/rive" "$@"
+    ;;
+  *)
+    exec "$root/compat/qemu-x86_64-static" \
+      -L "$root/compat/sysroot" \
+      -E "LD_LIBRARY_PATH=$guest_libs" \
+      "$root/versions/$version/rive" "$@"
+    ;;
+esac

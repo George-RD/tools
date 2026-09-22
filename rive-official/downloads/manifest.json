@@ -1,0 +1,17 @@
+{
+  "version": "1.0.2",
+  "artifacts": {
+    "darwin-arm64": {
+      "path": "v1.0.2/rive-macos-arm64.tar.gz",
+      "sha256": "1cb3c910d67c814cf03cd9c779bcc8b03ac145a5487d20a13ed27a1f37aa07ba"
+    },
+    "linux-x64": {
+      "path": "v1.0.2/rive-linux-x64.tar.gz",
+      "sha256": "9c8adbabf7ae6457bc01ea7d75a1f145ba51a99b67a69d9ac2bdcc6cf5363710"
+    },
+    "windows-x64": {
+      "path": "v1.0.2/rive-windows-x64.tar.gz",
+      "sha256": "7c22e870f4236e7cb9505286b9e211657c44516d37a9538a6716da3dd00e6552"
+    }
+  }
+}

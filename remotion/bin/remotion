@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Runner for the vendored Remotion project (fully-installed node_modules).
+#
+# Uses the repo's vendored Node.js when available. Chrome Headless Shell is
+# pre-seeded by setup.sh into node_modules/.remotion/chrome-headless-shell/<platform>/,
+# so `npx remotion render` works with no network. Override the browser with
+# REMOTION_BROWSER_EXECUTABLE or --browser-executable if needed.
+#
+# On hosts where os.networkInterfaces() throws (kernel/netlink restrictions),
+# the compat shim in scripts/shims/ is preloaded automatically.
+set -euo pipefail
+root="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
+readonly root
+
+platform="${TOOLS_PLATFORM:-}"
+if [ -z "$platform" ]; then
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64) platform=linux-x64 ;;
+    Linux-aarch64|Linux-arm64) platform=linux-arm64 ;;
+    *) printf 'Unsupported platform: %s-%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
+  esac
+fi
+
+node_bin="$root/node/$platform/bin/node"
+[ -x "$node_bin" ] || node_bin="$(command -v node)"
+[ -n "$node_bin" ] || { printf 'No node found (looked at %s and PATH)\n' "$root/node/$platform/bin/node" >&2; exit 1; }
+
+# FFmpeg on PATH (Remotion bundles its own too, but this keeps `ffmpeg` available
+# and matches the pinned build).
+if [ -x "$root/vendor/ffmpeg/$platform/bin/ffmpeg" ]; then
+  case ":$PATH:" in *":$root/vendor/ffmpeg/$platform/bin:"*) ;; *)
+    export PATH="$root/vendor/ffmpeg/$platform/bin:$PATH" ;; esac
+fi
+
+# Network-interface shim, only load-bearing on restricted hosts.
+shim="$root/scripts/shims/os-network-interfaces.cjs"
+case "${NODE_OPTIONS:-}" in
+  *os-network-interfaces*) ;;
+  *) export NODE_OPTIONS="--require $shim${NODE_OPTIONS:+ $NODE_OPTIONS}" ;;
+esac
+
+# Remotion resolves the entry point (and node_modules) relative to the current
+# directory, so run from the project root like `npx remotion` would.
+cd "$root/remotion"
+exec "$node_bin" "$root/remotion/node_modules/@remotion/cli/remotion-cli.js" "$@"

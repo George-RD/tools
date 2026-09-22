@@ -1,0 +1,12 @@
+{
+  "name": "tools-hyperframes-cli",
+  "private": true,
+  "description": "Pinned, fully-installed HyperFrames CLI for offline/agent use (committed node_modules).",
+  "dependencies": {
+    "@esbuild/linux-x64": "^0.25.12",
+    "@img/sharp-libvips-linux-x64": "^1.3.3",
+    "@img/sharp-linux-x64": "^0.35.0",
+    "hyperframes": "0.8.59",
+    "libvips": "^0.0.2"
+  }
+}

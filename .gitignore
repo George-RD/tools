@@ -1,0 +1,12 @@
+# Raw payloads whose exact bytes are committed as .archives/*.tar.gz.
+# setup.sh restores them (with hash verification).
+node/linux-x64/
+node/linux-arm64/
+vendor/chrome-headless-shell/linux-x64/
+vendor/chrome-headless-shell/linux-arm64/
+vendor/chrome-libs/linux-x64/
+vendor/chrome-libs/linux-arm64/
+remotion/node_modules/.remotion/chrome-headless-shell/linux-arm64/
+remotion/node_modules/.remotion/chrome-headless-shell/linux64/
+.downloads/
+.verify/

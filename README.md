@@ -1,0 +1,145 @@
+# tools — a self-contained toolchain for agent sandboxes
+
+Vendored, fully-installed toolchain so an environment **without network access or
+package managers** (e.g. a ChatGPT container that can only `git clone`) can run:
+
+| Tool | What it does | Where |
+|---|---|---|
+| **HyperFrames** | HTML → deterministic MP4 video framework (HeyGen, Apache-2.0) | `hyperframes/` |
+| **Remotion** | React → programmatic video (Remotion license, see `remotion/`) | `remotion/` |
+| **Rive CLI** | Official Rive authoring CLI (RML → `.riv`), 1.0.2 | `rive-official/` |
+
+Everything needed at runtime is in the repository: `node_modules/`, vendored
+Node.js, Chrome Headless Shell + the system libraries it needs, FFmpeg, and (for
+the Rive CLI) an x86-64 emulation layer.
+
+```
+node/                   vendored Node.js 22 (linux-x64 + linux-arm64)
+vendor/
+  chrome-headless-shell/  Chrome-for-Testing headless shell (both linux arches)
+  chrome-libs/            system libraries Chrome needs (both arches)
+    <platform>/lib          full set extracted from Debian packages
+    <platform>/lib-nocore   relative symlinks to all of it except the core C
+                            runtime — the safe thing to put on LD_LIBRARY_PATH
+  chrome-launch.sh        browser entry point (puppeteer-compatible)
+  ffmpeg/                 static FFmpeg + FFprobe (both linux arches)
+hyperframes/
+  source/                 upstream repo tree (no git history; real skill media,
+                          see LFS_STATUS.md)
+  cli/                    npm-installed hyperframes CLI + node_modules
+  bin/hyperframes         wrapper: vendored node + browser + ffmpeg
+remotion/                 Remotion template project, node_modules installed
+  bin/remotion            wrapper for the installed CLI
+  bin/browser-executable.sh  runs the project's pinned browser with vendored libs
+rive-official/
+  bin/rive                wrapper: official x86-64 payload (QEMU on aarch64)
+  versions/1.0.2/         official payload + bundled docs/samples
+  compat/                 static QEMU + x86-64 libraries + Mesa software renderer
+scripts/                  fetch/vendor/pack/verify scripts (reproducible rebuild)
+.archives/                large payloads as committed .tar.gz + SHA-256 manifest
+```
+
+## Quick start
+
+```bash
+git clone https://github.com/George-RD/tools
+cd tools
+./setup.sh                # extracts .archives payloads, verifies hashes, reports
+bash scripts/verify.sh    # end-to-end checks of all three toolchains
+```
+
+`setup.sh` is only needed when the payload directories are absent — i.e. on any
+fresh clone. It extracts the committed archives into their normal locations and
+verifies them against `.archives/MANIFEST.sha256`.
+
+### HyperFrames
+
+```bash
+./hyperframes/bin/hyperframes init my-video
+cd my-video
+../../hyperframes/bin/hyperframes lint
+../../hyperframes/bin/hyperframes render --output out/video.mp4
+```
+
+The wrapper pins the vendored Node, sets `HYPERFRAMES_BROWSER_PATH` to
+`vendor/chrome-launch.sh` (vendored browser + libraries), and puts the vendored
+FFmpeg on `PATH`. Renders use the `beginframe` capture path, which is what the
+vendored chrome-headless-shell is for.
+
+### Remotion
+
+```bash
+cd remotion
+../remotion/bin/remotion render src/index.ts HelloWorld out/helloworld.mp4
+../remotion/bin/remotion studio src/index.ts
+```
+
+The project's pinned browser is pre-seeded for both linux arches in
+`remotion/node_modules/.remotion/chrome-headless-shell/`, and
+`remotion.config.ts` points Remotion at `bin/browser-executable.sh`, which runs
+it with the vendored libraries. Nothing downloads on first render.
+Set `REMOTION_USE_DEFAULT_BROWSER=1` to use Remotion's own browser management.
+
+### Rive CLI
+
+```bash
+./rive-official/bin/rive --version          # rive 1.0.2
+./rive-official/bin/rive create mygame
+./rive-official/bin/rive mygame --verify --format=json
+./rive-official/bin/rive mygame --once                    # → build/*.riv
+./rive-official/bin/rive mygame --screenshot=out.png --advance=1
+```
+
+On x86-64 hosts the official binary runs natively; on aarch64 a static QEMU user
+emulator runs it (no binfmt, no root). The wrapper scopes `HOME` and all state
+under `rive-official/home/` and disables analytics. `rive login`, `--publish`
+and `--rev` need a Rive account and network; everything else is offline.
+
+## Platform support
+
+Both linux-x64 and linux-arm64 are committed for Node, Chrome, the Chrome
+libraries, FFmpeg and Remotion's browser and compositor. Each wrapper autodetects
+from `uname`; `TOOLS_PLATFORM=linux-x64|linux-arm64` overrides it.
+
+## Notes for sandboxed or unusual hosts
+
+- **Chrome's system libraries.** Minimal containers often lack them, and some
+  hosts (NixOS) have no FHS `/lib` at all. `vendor/chrome-libs/<platform>/lib`
+  carries the libraries extracted from Debian packages, and `lib-nocore` is a
+  relative-symlink overlay of everything except the core C runtime. Put
+  `lib-nocore` — never `lib` — on `LD_LIBRARY_PATH` for a browser process: a
+  full set would shadow the host's libc/loader and break process re-exec, and
+  would break any Node.js process sharing that environment (OpenSSL symbols).
+  `vendor/chrome-launch.sh` already does the right thing.
+- **Never set the browser's `LD_LIBRARY_PATH` for Node.js.** Use
+  `vendor/chrome-launch.sh` as the browser executable instead, which is exactly
+  what the HyperFrames and Remotion wrappers do.
+- **`os.networkInterfaces()` failures.** The Remotion wrapper preloads
+  `scripts/shims/os-network-interfaces.cjs`, which only takes effect when the
+  real call throws (restricted kernels reject `uv_interface_addresses`).
+- **Archives.** Payload files above GitHub's 100 MiB limit are committed as
+  `.archives/*.tar.gz` with a SHA-256 manifest; `setup.sh` restores them. The
+  raw extraction paths are the only entries in `.gitignore` — everything else in
+  this repository is committed directly, including `node_modules`.
+
+## Rebuilding
+
+```bash
+bash scripts/fetch-vendor.sh          # Node, Chrome, FFmpeg, HyperFrames source
+uv run python3 scripts/vendor-chrome-libs-debian.py --arch arm64   # and amd64
+bash scripts/make-lib-nocore.sh       # build the lib-nocore overlays
+bash scripts/vendor-rive.sh           # Rive payload + QEMU + x86-64 libs + Mesa
+bash scripts/fetch-hf-lfs.sh          # real LFS media for skills/src assets
+bash scripts/pack-archives.sh         # .archives bundles + manifest
+bash scripts/verify.sh                # end-to-end verification
+```
+
+## Licenses
+
+Third-party components keep their own licenses:
+HyperFrames — Apache-2.0 (`hyperframes/source/LICENSE`);
+Remotion — Remotion License (`remotion/node_modules/remotion/LICENSE`; free for
+individuals and small/non-profit organisations, company license otherwise);
+Rive CLI — Rive's terms (`rive-official/versions/1.0.2/docs/publishing.md`);
+Node.js, Chrome for Testing and FFmpeg — their respective licenses, included
+beside each copy.
