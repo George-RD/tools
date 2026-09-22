@@ -1,0 +1,119 @@
+name: Artifact large-file transfer test
+
+# Manually triggered probe for LARGE payloads on the artifact route, answering
+# the two questions the tiny transfer test cannot:
+#
+#   1. GitHub side — does this account accept large artifacts at all
+#      (per-artifact limits and artifact-storage allowance)?
+#   2. Receiving side — can the connector download a large artifact end to end,
+#      and re-verify its SHA-256 after unpacking?
+#
+# The payload is random bytes, so it cannot be compressed away by the zip
+# wrapping GitHub applies to every artifact: the sizes printed here are the
+# sizes that actually move. Two payloads can be created in one run so a single
+# execution can bracket the account's total storage allowance.
+#
+# Dispatch from the Actions tab, or:
+#   gh workflow run artifact-large-transfer-test.yml -R George-RD/tools
+#
+# Suggested first run: the 700 MiB default plus the 300 MiB second payload —
+# together they show whether ~1 GiB of artifact storage is available, which is
+# what the full Linux-x64 toolchain bundle needs.
+#
+# These probe artifacts are disposable: delete them after the test
+# (gh api -X DELETE repos/George-RD/tools/actions/artifacts/<id>) so they do
+# not consume storage the real bundle needs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      size_mb:
+        description: 'First payload size in MiB (incompressible random bytes)'
+        required: true
+        default: '700'
+      second_size_mb:
+        description: 'Second payload size in MiB (0 = skip)'
+        required: false
+        default: '300'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Create the payload archives
+        env:
+          A: ${{ inputs.size_mb }}
+          B: ${{ inputs.second_size_mb }}
+        run: |
+          set -euo pipefail
+          mkdir -p probe out
+
+          dd if=/dev/urandom of=probe/random-a.bin bs=1M count="$A" status=none
+          tar -cf "out/large-transfer-a-${A}mib.tar" -C probe random-a.bin
+          sha256sum "out/large-transfer-a-${A}mib.tar" > "out/large-transfer-a-${A}mib.tar.sha256"
+
+          if [ "$B" != "0" ]; then
+            dd if=/dev/urandom of=probe/random-b.bin bs=1M count="$B" status=none
+            tar -cf "out/large-transfer-b-${B}mib.tar" -C probe random-b.bin
+            sha256sum "out/large-transfer-b-${B}mib.tar" > "out/large-transfer-b-${B}mib.tar.sha256"
+          fi
+
+          echo "== payload files =="
+          ls -l out/
+
+      - name: Report and summarise
+        env:
+          A: ${{ inputs.size_mb }}
+          B: ${{ inputs.second_size_mb }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Artifact large-file transfer test"
+            echo
+            echo "Payload sizes are incompressible random bytes — the zip wrapping"
+            echo "GitHub applies to artifacts cannot shrink them, so these are the"
+            echo "sizes that actually move."
+            echo
+            echo '```'
+            ls -l out/
+            echo
+            cat out/*.sha256
+            echo '```'
+            echo
+            echo "### Verify on the receiving side"
+            echo "1. download every artifact of this run, unzip each"
+            echo "2. for each part: \`sha256sum -c large-transfer-*.tar.sha256\`"
+            echo "3. \`tar -tf large-transfer-*.tar\` — one file, \`random-*.bin\`"
+            echo
+            echo "If this works, the same route carries the Linux-x64 toolchain"
+            echo "bundle, which is split into sub-2 GiB parts with a matching"
+            echo "SHA-256 manifest."
+            echo
+            echo "Probe artifacts are disposable — delete them once tested so they"
+            echo "do not hold storage the real bundle needs."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload first payload
+        uses: actions/upload-artifact@v7
+        with:
+          name: large-transfer-a-${{ inputs.size_mb }}mib
+          path: |
+            out/large-transfer-a-*.tar
+            out/large-transfer-a-*.tar.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload second payload
+        if: inputs.second_size_mb != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: large-transfer-b-${{ inputs.second_size_mb }}mib
+          path: |
+            out/large-transfer-b-*.tar
+            out/large-transfer-b-*.tar.sha256
+          if-no-files-found: error
+          retention-days: 7
