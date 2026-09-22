@@ -152,6 +152,37 @@ bash scripts/pack-archives.sh         # .archives bundles + manifest
 bash scripts/verify.sh                # end-to-end verification
 ```
 
+## Transfer tests
+
+`.github/workflows/artifact-transfer-test.yml` is a manual, deliberately cheap
+probe of the transfer route for environments that can neither clone nor download:
+
+```
+GitHub Actions run -> workflow artifact -> connector download -> extraction
+```
+
+Dispatch it from the Actions tab (or `gh workflow run artifact-transfer-test.yml -R George-RD/tools`)
+and it uploads one tiny artifact — `artifact-transfer-test.tar.gz` plus its
+`.sha256`, packed from `ci/artifact-test/` — holding a text file and an
+executable shell script. The inner tar is what preserves the executable bit; the
+zip wrapping every GitHub artifact does not touch it. The run log and the job
+summary print both SHA-256 values, so the receiving side can confirm the bytes
+it got are the bytes that were packed.
+
+Note: GitHub does not serve Actions artifacts anonymously — the REST download
+endpoint answers `401` without a token even for a public repo, so the receiving
+connector must be authenticated to the repo (any token with `actions:read`, or
+repo read access).
+
+## Large payloads and this repository's packing rule
+
+Payload files above GitHub's 100 MiB limit are committed as `.archives/*.tar.gz`
+with a SHA-256 manifest; `setup.sh` restores them. When a bundle is built for a
+no-network consumer, package **Linux x64 first**, include installed dependencies
+(including dot-directories such as `.bin`) and local test assets, ship a version
+manifest and SHA-256 checksums, and exclude credentials and runtime login state
+(for this repo: `rive-official/home/`).
+
 ## Licenses
 
 Third-party components keep their own licenses:
