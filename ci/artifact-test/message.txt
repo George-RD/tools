@@ -1,0 +1,23 @@
+George-RD/tools — artifact transfer test
+========================================
+
+This file exists only to prove a transfer path:
+
+  GitHub Actions run -> workflow artifact -> connector download -> local extraction
+
+If you are reading this on a machine with no network access, no node and no
+package managers, and you got here by downloading the workflow artifact
+"artifact-transfer-test" and extracting artifact-transfer-test.tar.gz from
+inside it, then the artifact route works and the full offline toolchain bundle
+can ship the same way.
+
+The companion file hello.sh must arrive with its executable bit intact:
+
+  ./hello.sh
+
+It prints "artifact transfer OK" and the SHA-256 of this file, which you can
+compare against the checksums printed in the run summary and in the run log.
+
+Repo:     https://github.com/George-RD/tools
+Workflow: .github/workflows/artifact-transfer-test.yml
+Payload:  ci/artifact-test/

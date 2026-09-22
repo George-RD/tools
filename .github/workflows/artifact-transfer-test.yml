@@ -1,0 +1,79 @@
+name: Artifact transfer test
+
+# Manually triggered probe for the offline-bundle transfer route:
+#   GitHub Actions -> workflow artifact -> connector download -> local extraction
+#
+# It ships ONE tiny artifact holding a text file and an executable shell script
+# inside a tar.gz — the same packing the full Linux-x64 toolchain bundle will
+# use. The inner tar is what preserves the executable bit; the zip wrapping that
+# GitHub applies to every artifact does not touch it.
+#
+# Deliberately cheap: one standard GitHub-hosted runner, no dependency installs,
+# no toolchain payload. Dispatch from the Actions tab, or:
+#   gh workflow run artifact-transfer-test.yml -R George-RD/tools
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show the payload and its modes
+        run: ls -l ci/artifact-test
+
+      - name: Pack the payload into a tar.gz
+        run: |
+          set -euo pipefail
+          tar -czf artifact-transfer-test.tar.gz -C ci/artifact-test message.txt hello.sh
+          sha256sum artifact-transfer-test.tar.gz > artifact-transfer-test.tar.gz.sha256
+
+      - name: Print checksums and verification steps
+        run: |
+          set -euo pipefail
+          tar_sha=$(cut -d' ' -f1 artifact-transfer-test.tar.gz.sha256)
+          msg_sha=$(sha256sum ci/artifact-test/message.txt | cut -d' ' -f1)
+          mode=$(stat -c '%a' ci/artifact-test/hello.sh)
+
+          echo "artifact-transfer-test.tar.gz sha256: $tar_sha"
+          echo "message.txt sha256: $msg_sha"
+          echo "hello.sh mode as committed: $mode (expect 755)"
+
+          {
+            echo "## Artifact transfer test"
+            echo
+            echo "Artifact **artifact-transfer-test** — one zip containing"
+            echo "\`artifact-transfer-test.tar.gz\` and its \`.sha256\` file."
+            echo
+            echo '```'
+            tar -tvzf artifact-transfer-test.tar.gz
+            echo '```'
+            echo
+            echo "| file | sha256 |"
+            echo "| --- | --- |"
+            echo "| artifact-transfer-test.tar.gz | \`$tar_sha\` |"
+            echo "| ci/artifact-test/message.txt | \`$msg_sha\` |"
+            echo
+            echo "hello.sh mode as committed: \`$mode\` (expect \`755\`)"
+            echo
+            echo "### Verify on the receiving side"
+            echo "1. download the artifact, unzip it -> \`artifact-transfer-test.tar.gz\`"
+            echo "2. \`sha256sum -c artifact-transfer-test.tar.gz.sha256\`"
+            echo "3. \`tar -xzf artifact-transfer-test.tar.gz\`"
+            echo "4. \`./hello.sh\` -> prints \`artifact transfer OK\` and the message.txt sha256 above"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: artifact-transfer-test
+          path: |
+            artifact-transfer-test.tar.gz
+            artifact-transfer-test.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
