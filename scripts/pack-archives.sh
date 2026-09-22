@@ -92,6 +92,10 @@ remotion/node_modules/.remotion/chrome-headless-shell/linux-arm64/
 remotion/node_modules/.remotion/chrome-headless-shell/linux64/
 .downloads/
 .verify/
+
+# Crash artefacts: QEMU/Chrome core dumps are large, meaningless, and would
+# otherwise be swept into a commit by `git add -A`.
+*.core
 EOF
 echo "wrote .gitignore (extraction paths only)"
 

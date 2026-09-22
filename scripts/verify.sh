@@ -47,6 +47,18 @@ else
   bad "rive-official/bin/rive missing"
 fi
 
+echo "== vendored library overlays =="
+if [ -x scripts/audit-libs.sh ]; then
+  if out="$(bash scripts/audit-libs.sh 2>&1)"; then
+    ok "lib-nocore overlays complete (both arches)"
+  else
+    bad "lib-nocore overlays incomplete"
+    printf '%s\n' "$out" | sed 's/^/       /'
+  fi
+else
+  bad "scripts/audit-libs.sh missing"
+fi
+
 echo "== HyperFrames =="
 if [ -x hyperframes/bin/hyperframes ]; then
   v="$(hyperframes/bin/hyperframes --version 2>/dev/null | tail -1)"
