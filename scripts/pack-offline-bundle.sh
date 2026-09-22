@@ -64,16 +64,20 @@ INCLUDE=(
 
 # Drop the arm64 halves and runtime state from what would otherwise be included
 # wholesale, and never let the bundle pick up scratch directories.
+#
+# Note: tar matches --exclude patterns against the member names it is actually
+# archiving. The members here are the names in INCLUDE (e.g. "rive-official"),
+# so their children appear as "rive-official/home" — a leading "./" would not
+# match, and the excluded directory would silently ship. Each pattern is listed
+# in both forms so an exclude cannot be defeated by how the path was spelled.
 EXCLUDE=(
-  --exclude='.*/node_modules/.remotion/chrome-headless-shell/linux-arm64'
-  --exclude='./remotion/node_modules/.remotion/chrome-headless-shell/linux-arm64'
-  --exclude='./node/linux-arm64'
-  --exclude='./vendor/*/linux-arm64'
-  --exclude='./rive-official/home'
-  --exclude='./.downloads'
-  --exclude='./.verify'
-  --exclude='./.bundle'
-  --exclude='./.git'
+  --exclude='rive-official/home'   --exclude='./rive-official/home'
+  --exclude='node/linux-arm64'     --exclude='./node/linux-arm64'
+  --exclude='*/linux-arm64'        --exclude='*/.remotion/chrome-headless-shell/linux-arm64'
+  --exclude='.downloads'           --exclude='./.downloads'
+  --exclude='.verify'              --exclude='./.verify'
+  --exclude='.bundle'              --exclude='./.bundle'
+  --exclude='.git'                 --exclude='./.git'
   --exclude='*.core'
 )
 
@@ -148,13 +152,50 @@ cat "$MANIFEST"
 echo
 echo "-- creating tarball (this reads ~2-3 GB, expect a few minutes)"
 TARBALL="$STAGE/$NAME.tar.gz"
-# Deterministic-ish packing: sort names, drop ownership, keep permissions.
+# Build uncompressed first so VERSION-MANIFEST.txt can be appended to the same
+# archive (a .tar.gz cannot be appended to), then compress once.
 tar --sort=name \
     --owner=0 --group=0 --numeric-owner \
     "${EXCLUDE[@]}" \
-    -czf "$TARBALL" \
+    -cf "${TARBALL%.gz}" \
     -C "$ROOT" "${present[@]}"
+tar --sort=name --owner=0 --group=0 --numeric-owner \
+    -rf "${TARBALL%.gz}" -C "$STAGE" VERSION-MANIFEST.txt
+# --- prove the exclusions actually applied ----------------------------------
+# tar's --exclude silently does nothing when a pattern does not match how the
+# member is spelled, so an excluded directory can ship without any error. That
+# silently put rive-official/home (the Rive CLI's runtime state, including any
+# `rive login` credentials) into a bundle once. Checking the archive itself is
+# the only reliable way to know.
+echo "-- checking exclusions against the archive"
+listing="$(tar -tf "${TARBALL%.gz}")"
+excl_fail=0
+must_absent=(
+  'rive-official/home'
+  'node/linux-arm64'
+  'vendor/chrome-headless-shell/linux-arm64'
+  'vendor/chrome-libs/linux-arm64'
+  'vendor/ffmpeg/linux-arm64'
+  'remotion/node_modules/.remotion/chrome-headless-shell/linux-arm64'
+  '.git/'
+  '.downloads/'
+  '.verify/'
+)
+for p in "${must_absent[@]}"; do
+  if printf '%s\n' "$listing" | grep -q "^$p"; then
+    printf '   LEAK: %s is in the archive\n' "$p" >&2
+    excl_fail=1
+  fi
+done
+if [ "$excl_fail" = 0 ]; then
+  echo "   ok: no arm64 payloads, no .git/.downloads/.verify, no rive-official/home"
+else
+  printf '   refusing to publish a bundle with leaked content\n' >&2
+  exit 1
+fi
 
+echo "-- compressing (single pass)"
+gzip -6 -f "${TARBALL%.gz}"
 size=$(stat -c %s "$TARBALL")
 printf '   %s: %.1f MiB\n' "$(basename "$TARBALL")" "$(echo "$size" | awk '{print $1/1048576}')"
 
