@@ -7,7 +7,7 @@ package managers** (e.g. a ChatGPT container that can only `git clone`) can run:
 |---|---|---|
 | **HyperFrames** | HTML → deterministic MP4 video framework (HeyGen, Apache-2.0) | `hyperframes/` |
 | **Remotion** | React → programmatic video (Remotion license, see `remotion/`) | `remotion/` |
-| **Rive CLI** | Official Rive authoring CLI (RML → `.riv`), 1.0.2 | `rive-official/` |
+| **Rive CLI** | Official Rive authoring CLI (RML → `.riv`), latest release | `rive-official/` |
 
 Everything needed at runtime is in the repository: `node_modules/`, vendored
 Node.js, Chrome Headless Shell + the system libraries it needs, FFmpeg, and (for
@@ -33,7 +33,8 @@ remotion/                 Remotion template project, node_modules installed
   bin/browser-executable.sh  runs the project's pinned browser with vendored libs
 rive-official/
   bin/rive                wrapper: official x86-64 payload (QEMU on aarch64)
-  versions/1.0.2/         official payload + bundled docs/samples
+  versions/<ver>/         official payload + bundled docs/samples (the version
+                          the wrapper is pinned to; see scripts/update-rive.sh)
   compat/                 static QEMU + x86-64 libraries + Mesa software renderer
 scripts/                  fetch/vendor/pack/verify scripts (reproducible rebuild)
 .archives/                large payloads as committed .tar.gz + SHA-256 manifest
@@ -83,7 +84,7 @@ Set `REMOTION_USE_DEFAULT_BROWSER=1` to use Remotion's own browser management.
 ### Rive CLI
 
 ```bash
-./rive-official/bin/rive --version          # rive 1.0.2
+./rive-official/bin/rive --version          # e.g. rive 1.1.1
 ./rive-official/bin/rive create mygame
 ./rive-official/bin/rive mygame --verify --format=json
 ./rive-official/bin/rive mygame --once                    # → build/*.riv
@@ -94,6 +95,21 @@ On x86-64 hosts the official binary runs natively; on aarch64 a static QEMU user
 emulator runs it (no binfmt, no root). The wrapper scopes `HOME` and all state
 under `rive-official/home/` and disables analytics. `rive login`, `--publish`
 and `--rev` need a Rive account and network; everything else is offline.
+
+The vendored payload tracks the **latest official release**. Check or update:
+
+```bash
+bash scripts/update-rive.sh --check    # installed vs latest, changes nothing
+bash scripts/update-rive.sh            # install latest, verified by SHA-256
+bash scripts/update-rive.sh 1.1.1      # or a specific version
+```
+
+Rive publishes `linux-x64` only (no linux-arm64), so aarch64 hosts always go
+through the QEMU layer; `compat/` is version-independent and survives updates.
+The wrapper is deliberately pinned to one version, so the CLI's own
+`update`/`switch`/`uninstall` are refused — use `scripts/update-rive.sh`, which
+verifies the artifact against the SHA-256 in Rive's own manifest before
+installing it and repoints the pin.
 
 ## Platform support
 
@@ -128,7 +144,9 @@ from `uname`; `TOOLS_PLATFORM=linux-x64|linux-arm64` overrides it.
 bash scripts/fetch-vendor.sh          # Node, Chrome, FFmpeg, HyperFrames source
 uv run python3 scripts/vendor-chrome-libs-debian.py --arch arm64   # and amd64
 bash scripts/make-lib-nocore.sh       # build the lib-nocore overlays
+bash scripts/audit-libs.sh            # check the overlays are self-sufficient
 bash scripts/vendor-rive.sh           # Rive payload + QEMU + x86-64 libs + Mesa
+bash scripts/update-rive.sh           # move the Rive payload to the latest release
 bash scripts/fetch-hf-lfs.sh          # real LFS media for skills/src assets
 bash scripts/pack-archives.sh         # .archives bundles + manifest
 bash scripts/verify.sh                # end-to-end verification
@@ -140,6 +158,6 @@ Third-party components keep their own licenses:
 HyperFrames — Apache-2.0 (`hyperframes/source/LICENSE`);
 Remotion — Remotion License (`remotion/node_modules/remotion/LICENSE`; free for
 individuals and small/non-profit organisations, company license otherwise);
-Rive CLI — Rive's terms (`rive-official/versions/1.0.2/docs/publishing.md`);
+Rive CLI — Rive's terms (`rive-official/versions/<version>/docs/publishing.md`);
 Node.js, Chrome for Testing and FFmpeg — their respective licenses, included
 beside each copy.

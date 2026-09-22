@@ -17,8 +17,16 @@ check() { # check <name> <command...>
 
 echo "== Rive CLI =="
 if [ -x rive-official/bin/rive ]; then
-  v="$(rive-official/bin/rive --version 2>/dev/null || true)"
-  [ "$v" = "rive 1.0.2" ] && ok "rive --version ($v)" || bad "rive --version (got: $v)"
+  v="$(rive-official/bin/rive --version 2>/dev/null | tail -1 || true)"
+  # Do not hardcode a version: scripts/update-rive.sh moves this to the latest
+  # release. Check instead that the CLI runs and that its reported version
+  # matches the pin in the wrapper — a mismatch means a botched update.
+  pin="$(sed -n 's/^readonly version=//p' rive-official/bin/rive | head -1)"
+  case "$v" in
+    "rive $pin") ok "rive --version ($v, matches wrapper pin)";;
+    rive\ *)     bad "rive --version (got '$v' but wrapper pins '$pin')";;
+    *)           bad "rive --version (got: ${v:-<no output>})";;
+  esac
 
   mkdir -p "$WORK/rive" && cp -r rive-official/../../riv-tools/official/smoke/neutral "$WORK/rive/" 2>/dev/null || \
     cp -r /var/lib/hermes/riv-tools/official/smoke/neutral "$WORK/rive/" 2>/dev/null || true

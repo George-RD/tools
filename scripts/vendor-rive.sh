@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Vendor the official Rive CLI (1.0.2, linux x64) into rive-official/, relocatable.
+# Vendor a specific official Rive CLI release (default 1.0.2, linux x64) into
+# rive-official/, relocatable.
 #
-# Source of truth on this host (already hash-verified install):
-#   /var/lib/hermes/riv-tools/official   (see PROVENANCE.md / operator report)
-# If that tree is missing, the script re-downloads the official tarball and verifies SHA-256.
-#
-# Produces a tree that mirrors the upstream install layout but with NO absolute
-# /nix/store or $HOME references:  bin/rive (wrapper) + versions/<ver>/{rive,docs,samples}
-# + compat/ (multiarch static QEMU, glibc/gcc/zlib/glvnd/x11/wayland/xkbcommon x86-64,
-# pruned Mesa software stack).
+# NOTE: for "always the latest release" use scripts/update-rive.sh instead —
+# it queries Rive's manifest, verifies SHA-256, installs the payload and
+# repoints the wrapper pin. This script pins explicit SHAs, so it is only
+# correct for the version it names. Both share the same layout:
+#   bin/rive (wrapper) + versions/<ver>/{rive,docs,samples}
+#   + compat/ (multiarch static QEMU, glibc/gcc/zlib/glvnd/x11/wayland/xkbcommon
+#     x86-64, pruned Mesa software stack) — compat is version-independent.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="${RIVE_SRC:-/var/lib/hermes/riv-tools/official}"

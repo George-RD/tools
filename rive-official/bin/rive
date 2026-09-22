@@ -13,7 +13,7 @@
 set -euo pipefail
 root="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 readonly root
-readonly version=1.0.2
+readonly version=1.1.1
 case "${1-}" in
   update|switch|uninstall)
     printf '%s\n' 'This vendored copy is pinned to 1.0.2; automatic version management is disabled.' >&2
