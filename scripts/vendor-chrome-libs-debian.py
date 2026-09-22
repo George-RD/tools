@@ -15,6 +15,7 @@ import gzip
 import io
 import os
 import re
+import subprocess
 import sys
 import tarfile
 import urllib.request
@@ -224,6 +225,22 @@ def main():
     total = sum(os.path.getsize(os.path.join(libdir, f)) for f in real)
     print(f'vendor: {len(os.listdir(libdir))} entries ({len(real)} real), '
           f'{total/1e6:.1f} MB in {libdir}')
+
+    # lib-nocore is derived from lib/ and is what actually goes on
+    # LD_LIBRARY_PATH. Rebuild it here so a re-vendor can never leave a stale or
+    # absent overlay behind — that previously produced a browser that failed
+    # with "libz.so.1 => not found". Then check it is self-sufficient.
+    nocore = os.path.join(ROOT, 'scripts', 'make-lib-nocore.sh')
+    audit = os.path.join(ROOT, 'scripts', 'audit-libs.sh')
+    if not args.out and os.path.exists(nocore):
+        print('rebuilding the lib-nocore overlay...')
+        rc = subprocess.call(['bash', nocore])
+        if rc != 0:
+            sys.exit(f'error: {nocore} failed (rc={rc})')
+        if os.path.exists(audit):
+            rc = subprocess.call(['bash', audit])
+            if rc != 0:
+                sys.exit('error: lib-nocore is incomplete (see audit output above)')
 
 
 if __name__ == '__main__':
