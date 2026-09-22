@@ -1,0 +1,31 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.logStudioError = exports.logStudioErrorData = void 0;
+const call_api_1 = require("../../components/call-api");
+const browser_studio_operations_1 = require("../../helpers/browser-studio-operations");
+const loggedErrors = new Set();
+const maxLoggedErrors = 100;
+const logStudioErrorData = (data) => {
+    if ((0, browser_studio_operations_1.getBrowserStudioOperations)() !== null) {
+        return;
+    }
+    const key = JSON.stringify([data.name, data.message, data.stack]);
+    if (loggedErrors.has(key)) {
+        return;
+    }
+    if (loggedErrors.size >= maxLoggedErrors) {
+        loggedErrors.clear();
+    }
+    loggedErrors.add(key);
+    (0, call_api_1.callApi)('/api/log-studio-error', data).catch(() => undefined);
+};
+exports.logStudioErrorData = logStudioErrorData;
+const logStudioError = (error) => {
+    (0, exports.logStudioErrorData)({
+        name: typeof error.name === 'string' ? error.name : null,
+        message: typeof error.message === 'string' ? error.message : '',
+        stack: typeof error.stack === 'string' ? error.stack : null,
+        symbolicatedStackFrames: null,
+    });
+};
+exports.logStudioError = logStudioError;

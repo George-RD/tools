@@ -1,0 +1,22 @@
+import React from 'react';
+import type { SelectedOutline } from './selected-outline-geometry';
+import { type SelectedOutlineSnapPoint } from './selected-outline-snap';
+import { type SelectedOutlineContextMenuOpenHandler, type SelectedOutlineDragTarget, type SelectedOutlineLayoutTarget, type SelectedOutlineTarget } from './selected-outline-types';
+import { type TimelineSelection, type TimelineSelectionInteraction } from './Timeline/TimelineSelection';
+type SelectedOutlineElementProps = {
+    readonly compositionHeight: number;
+    readonly compositionWidth: number;
+    readonly dragging: boolean;
+    readonly getAllDragOutlines: () => readonly SelectedOutline[];
+    readonly getAllDragTargets: () => readonly SelectedOutlineDragTarget[];
+    readonly getLatestTargetByKey: (key: string) => SelectedOutlineTarget | undefined;
+    readonly layoutTarget: SelectedOutlineLayoutTarget | undefined;
+    readonly outline: SelectedOutline;
+    readonly onDraggingChange: (dragging: boolean) => void;
+    readonly onSnapPointsChange: (snapPoints: readonly SelectedOutlineSnapPoint[]) => void;
+    readonly onSelect: (item: TimelineSelection, interaction: TimelineSelectionInteraction) => void;
+    readonly registerContextMenuOpen: (key: string, handler: SelectedOutlineContextMenuOpenHandler | null) => void;
+    readonly scale: number;
+};
+export declare const SelectedOutlineElement: React.NamedExoticComponent<SelectedOutlineElementProps>;
+export {};

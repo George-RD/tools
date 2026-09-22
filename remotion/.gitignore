@@ -2,13 +2,19 @@
 # so sandboxes without network access or package managers can clone it and run
 # Remotion immediately. Do not add a blanket node_modules ignore here.
 #
+# NOTE: do NOT ignore "dist" at the top level either — npm packages keep their
+# build output in nested dist/ directories (e.g. node_modules/@remotion/cli/dist),
+# and a bare "dist" pattern excludes those too.
+#
 # The two pinned browser directories are the exception: browser binaries exceed
 # GitHub's per-file limit, so their exact bytes are committed as
 # .archives/remotion-browser-*.tar.gz and restored by the repository's setup.sh.
 node_modules/.remotion/chrome-headless-shell/linux64/
 node_modules/.remotion/chrome-headless-shell/linux-arm64/
 
-dist
+# Only this project's own build output (never nested package output).
+/dist/
+
 .DS_Store
 .env
 

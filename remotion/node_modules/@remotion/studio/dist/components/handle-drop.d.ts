@@ -1,0 +1,15 @@
+import type { Dimensions } from '../helpers/is-current-selected-still';
+import { type InsertElementDropPosition } from './import-assets';
+import type { SvgImportMode } from './SvgImportDialog';
+export declare const handleDrop: ({ chooseSvgImportMode, compositionFile, compositionId, destinationDimensions, dropPosition, event, fps, from, localFiles, preferCompositionStart, }: {
+    chooseSvgImportMode: () => Promise<SvgImportMode | null>;
+    compositionFile: string;
+    compositionId: string;
+    destinationDimensions: Dimensions | null;
+    dropPosition: InsertElementDropPosition | null;
+    event: DragEvent;
+    fps: number;
+    from: number | null;
+    localFiles: File[] | null;
+    preferCompositionStart: boolean;
+}) => Promise<void>;
