@@ -221,6 +221,13 @@ committed. Two routes are maintained deliberately — a connector-only
 environment can only download Actions artifacts, while release assets are the
 better permanent copy (anonymous, no expiry, 2 GiB per file).
 
+**The packer verifies its own exclusions.** tar's `--exclude` matches the member
+name as spelled in the archive and fails silently when a pattern does not match,
+so a first build quietly shipped `rive-official/home` and an arm64 browser.
+`pack-offline-bundle.sh` now lists the finished archive and refuses to publish
+if any excluded path is present; `VERSION-MANIFEST.txt` is appended inside the
+archive so the receiving side needs no second download.
+
 ## Proving the integrations work offline
 
 ```bash

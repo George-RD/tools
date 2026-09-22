@@ -66,17 +66,30 @@ jobs:
           if [ -f "$NAME.parts.sha256" ]; then
             sha256sum -c "$NAME.parts.sha256"
           fi
-          if [ -f "$NAME.tar.gz.sha256" ] && compgen -G "$NAME.part-*" >/dev/null; then
-            joined="$(cat "$NAME.part-"* | sha256sum | awk '{print $1}')"
+
+          # Verify the artifact bytes against the published checksum, whether the
+          # bundle arrived as one file or as split parts. Checking only the split
+          # case would publish an unverified single-file bundle.
+          if [ -f "$NAME.tar.gz.sha256" ]; then
             want="$(awk '{print $1}' "$NAME.tar.gz.sha256")"
-            if [ "$joined" = "$want" ]; then
-              echo "ok: parts rejoin to the expected archive hash ($joined)"
+            if [ -f "$NAME.tar.gz" ]; then
+              got="$(sha256sum "$NAME.tar.gz" | awk '{print $1}')"
+              what="$NAME.tar.gz"
+            elif compgen -G "$NAME.part-*" >/dev/null; then
+              got="$(cat "$NAME.part-"* | sha256sum | awk '{print $1}')"
+              what="the rejoined parts"
             else
-              echo "::error::rejoined parts hash $joined, expected $want"
+              echo "::error::no $NAME.tar.gz and no parts — nothing to verify"
+              exit 1
+            fi
+            if [ "$got" = "$want" ]; then
+              echo "ok: $what hash matches the published checksum ($got)"
+            else
+              echo "::error::$what hashes to $got, expected $want"
               exit 1
             fi
           else
-            echo "no split parts found — uploading a single archive"
+            echo "::warning::no $NAME.tar.gz.sha256 asset — artifact published unverified"
           fi
 
       - name: Summarise for the receiving side
